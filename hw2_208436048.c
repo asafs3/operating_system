@@ -4,7 +4,6 @@ Name : Asaf Schwartz, I.D : 208436048
 */
 
 #define _POSIX_C_SOURCE 199309L // needed for CLOCK_MONOTONIC in clock_gettime 
-#define THREAD_STACK_SIZE  65536
 
 
 #include <stdio.h>
@@ -17,15 +16,13 @@ Name : Asaf Schwartz, I.D : 208436048
 #include <sys/time.h>
 #include <unistd.h>
 #include <semaphore.h>
-#include <errno.h>                  
-#include <limits.h>
-
 
 
 
 #define NUM_THREADS 4096  
 #define NUM_COUNTERS 100
 #define MAX_LINE_LEN 1024
+#define MAX_THR_CREATE 1000
 
 
 
@@ -186,7 +183,10 @@ void inc_dec_cnt(int cnt_idx, int inc_dec) {
     FILE* cntFile;
     char cntFileName[15];
     long long int cntValue;
-    
+    if (cnt_idx > numCounters) {
+        printf("couldn't access to exceeding counter index ( higher than the defined #counters : %d)\n", numCounters);
+        return;
+    }
 
     pthread_mutex_lock(&cntMutex[cnt_idx]);
 
@@ -256,11 +256,7 @@ void exec_cmd(char** job_args) {
 
 
         else if (cmd == 2) {
-            value = atoi(job_args[i]); // the counter index 
-            if (value > numCounters - 1) {
-                printf("couldn't access to exceeding counter index ( higher than the defined #counters = %d)\n", numCounters);
-                return;
-            }          
+            value = atoi(job_args[i]);            
             inc_dec_cnt(value, inc_dec);
 
             cmd = 0;
@@ -328,8 +324,6 @@ void print_log(int thr_index, char* job_line, long long int started_job, long lo
 //          thread function
 // ===============================
 void *thr_func (void *thr_info) {
-    return;
-    printf("4\n");
     struct thread_info* t_info = (thread_info *) thr_info;
     struct timespec curr_jobs_fetch_time;
     long long int curr_turn_around_time;
@@ -341,9 +335,11 @@ void *thr_func (void *thr_info) {
 
 
     while (true) {
-
+        // printf("thread : %d , try lock\n", t_info->index); // q
+/////////////////////////////////////////////
         pthread_mutex_lock(&queue_lock);
-
+        // printf("thread : %d , locked\n", t_info->index); // q
+        // printf("4\n"); // q
         if (is_queue_empty(job_q) == 1) {
             
             // printf("4.1\n"); // q
@@ -376,13 +372,8 @@ void *thr_func (void *thr_info) {
             curr_jobs_fetch_time.tv_sec = job_q->head->fetching_time.tv_sec;
             curr_jobs_fetch_time.tv_nsec = job_q->head->fetching_time.tv_nsec;
             // printf("6 \n"); // q
-            printf("6\n"); // l
-
             dequeue(job_q, t_info->job_line);
             // printf("%")
-            printf("7\n"); // l
-
-            jobs_in_process --;
 
             // for statistics
             num_of_jobs ++;
@@ -394,15 +385,12 @@ void *thr_func (void *thr_info) {
             clock_gettime(CLOCK_MONOTONIC, &start_time);
             char job_line_copy[MAX_LINE_LEN];
             strcpy(job_line_copy, t_info->job_line);
-            printf("8\n"); // l
-            printf("%s", job_line_copy); // l
-
-            usleep(100);
-            exec_thread_jobs(job_line_copy); 
-                 
-            // printf("thread : %d, executed %s\n", t_info->index, t_info->job_line); //b
             
-            printf("9\n"); // l
+            exec_thread_jobs(job_line_copy);      
+            
+            pthread_mutex_lock(&queue_lock);
+            jobs_in_process --;
+            pthread_mutex_unlock(&queue_lock);
 
 
             clock_gettime(CLOCK_MONOTONIC, &end_time);
@@ -499,11 +487,34 @@ void print_statistics(int numThreads ,stat_info stat_info_arr[NUM_THREADS]) {
 
 }
 
+// The function is used to create a predefined amount of threads
+// The offset is needed for the indexes matching in the different arrays.
+void create_threads(int logEn, int numCreate, thread_info* threads_info_array , pthread_t* threads, int offset){
+
+    for (int i = offset ; i < offset + numCreate ; i++) {
+        if (logEn == 1) {
+            char tlog_f_name[16];
+            sprintf(tlog_f_name, "thread%04d.txt", i); // string print function is needed to use an int varibale in a string
+            logFiles[i] = fopen(tlog_f_name, "w");
+            fclose(logFiles[i]);
+        }
+        threads_info_array[i].index = i; // send the thr_data[i] structure to the function call for thread i 
+
+        int succues = pthread_create(&threads[i], NULL, &thr_func, (void *)&threads_info_array[i]); 
+        if (succues != 0) {
+            printf("pthread_create returned error code %d\n", succues);
+            exit(-1);
+        }
+    }
+    
+}
+
+
 
 
 int main(int argc, const char *argv[]) {
 
-    usleep(200);
+    usleep(2000);
 
 
     // ===============================
@@ -536,7 +547,7 @@ int main(int argc, const char *argv[]) {
     // initialize an array of counter file pointers, of size num_counters
     numCounters = atoi(argv[3]);
     if (numCounters < 0 || numCounters > NUM_COUNTERS) {
-        printf("invalid number of counters [0 < numCounters < %d]\n", NUM_COUNTERS);
+        printf("invalid number of counters [0 < numCounters < %d\n]", NUM_COUNTERS);
         exit(-1);
     }
     long long int lld_zero = 0; // the counter files initial value
@@ -552,6 +563,7 @@ int main(int argc, const char *argv[]) {
     int numThreads = atoi(argv[2]);
     if (numThreads < 0 || numThreads > NUM_THREADS) {
         printf("invalid number of threads [0 < numThreads < %d]\n", NUM_THREADS);
+        exit(-1);
     }
     terminated_thr = 0;
 
@@ -566,54 +578,31 @@ int main(int argc, const char *argv[]) {
     // initialize an array of trace file pointers to all threads, of size num_threads
     pthread_t threads[numThreads];
     thread_info threads_info_array[numThreads];
-    pthread_attr_t  attrs;
-
     pthread_mutex_init(&queue_lock, NULL);
     pthread_cond_init(&queue_cond, NULL);
+
 
     // create a job queue
     char job_line[MAX_LINE_LEN];
     struct timespec job_received_time;
     jobs_in_process = 0;
     job_q = createQueue();
-    int counter = 0 ;
-    pthread_attr_init(&attrs);
-    pthread_attr_setstacksize(&attrs, PTHREAD_STACK_MIN + 0x4000);
-    for (int i = 0 ; i < numThreads ; i++) {
-        if (logEn == 1) {
-            char tlog_f_name[16];
-            sprintf(tlog_f_name, "thread%04d.txt", i); // string print function is needed to use an int varibale in a strin
-            logFiles[i] = fopen(tlog_f_name, "w");
-            fclose(logFiles[i]);
-        }
-        threads_info_array[i].index = i; // send the thr_data[i] structure to the function call for thread i 
-        
-        if ( pthread_create(&threads[i], &attrs, &thr_func, (void *)&threads_info_array[i]) ) {
-            
-            printf("errno is %d\n", errno);
-            perror("pthread_create failed : ");
-            printf("counter = %d\n", counter); // l
-            exit(-1);
+    // as it seems, there is a problem creating more than about 2000 threads in a time, so dividing it into creation of max at a time 
+    int numThreadstoCreate;
 
-        }
-        
-        // printf("counter = %d\n", counter); // l
-        counter ++ ;
-
-        // if (succues != 0) {
-        //     printf(" error code %d\n", succues);
-        //     exit(-1);
-        // }
+    if (numThreads >= MAX_THR_CREATE) {
+        create_threads(logEn, MAX_THR_CREATE, threads_info_array, threads, 0);
+        numThreadstoCreate = numThreads - MAX_THR_CREATE;
     }
-    pthread_attr_destroy(&attrs);
-    printf("counter = %d\n", counter); // l
-    
+    else {
+        create_threads(logEn, numThreads, threads_info_array, threads, 0);
+
+    }
     
     // ===============================
     //          jobs handling
     // ===============================
     
-
 
     while (fgets(job_line, MAX_LINE_LEN, cmdFile)) {
 
@@ -658,20 +647,25 @@ int main(int argc, const char *argv[]) {
             sleep (sleep_time/ 1000); // sleep units are in second, the time inserted represented in miliseconds
         }
         else if (strcmp(cmdType, "dispatcher_wait") == 0 ) {
-            // printf("must be a better soultion\n"); // guy - waiting option supposed to be with cond?
 
 
-            while (jobs_in_process != 0) {
+            while (true) { 
                 pthread_mutex_lock(&queue_lock); // lock the access to the queue, a shared resource for all threads
-                pthread_cond_wait(&dispatch_wait_cond, &queue_lock);
 
-                pthread_mutex_unlock(&queue_lock); // unlock the access to the queue
+                if (jobs_in_process != 0) {
+                    pthread_cond_wait(&dispatch_wait_cond, &queue_lock);
 
+                    pthread_mutex_unlock(&queue_lock); // unlock the access to the queue
+                    break;
 
+                }
             }
+
 
             
         }
+        
+
 
     
     }
@@ -682,14 +676,45 @@ int main(int argc, const char *argv[]) {
     pthread_mutex_unlock(&queue_lock);
 
     fclose(logDispatcher);
+    // offset explain - if created 2000, left to create #numThreadstoCreate, the first offset is 2000, if we still need to create more than 2000, 
+    // the offset is 4000
+    // define iternum = 1, and when adding 2000 more threads - the offset would be iternum*(2000) 
+    int iternum = 1;
+    while(true) {
+
+        if (numThreadstoCreate > 0) {
+
+            if (numThreadstoCreate >= MAX_THR_CREATE) {
+                create_threads(logEn, MAX_THR_CREATE, threads_info_array, threads, iternum*MAX_THR_CREATE);
+                numThreadstoCreate = numThreadstoCreate - MAX_THR_CREATE;
+                iternum ++ ;
+            }
+
+            else {
+                create_threads(logEn, numThreadstoCreate, threads_info_array, threads, iternum*MAX_THR_CREATE);
+                break;
+            }
+        }
+        else {
+            break;
+        }
+    }
     // printf("got finally\n"); //b
     // Wait for all pending background commands to complete before continuing to
     // process the next line in the input file
-    while (terminated_thr != numThreads) { 
+    
+
+    while (true) { 
             pthread_mutex_lock(&queue_lock);
+            if (terminated_thr == numThreads) {
+                pthread_mutex_unlock(&queue_lock);
+                break;    
+            }
             pthread_cond_signal(&queue_cond); // wake up one of the waiting to access the queue threads 
             pthread_mutex_unlock(&queue_lock);
+            usleep(200);
     }
+
     // pthread_cond_signal(&queue_cond); // wake up one of the waiting to access the queue threads 
     // pthread_mutex_unlock(&queue_lock);
 
@@ -705,6 +730,7 @@ int main(int argc, const char *argv[]) {
     print_statistics(numThreads ,thr_stat_info);
     
     printf("################### test finished ###################\n"); //b
+    exit(0);
 
 
 
