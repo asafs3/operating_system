@@ -89,3 +89,43 @@ sys_uptime(void)
   release(&tickslock);
   return xticks;
 }
+
+// ===============
+//      hw3
+// ===============
+int sys_getNumProc(void){
+  int numProc = 0;
+  numProc = getNumProc();
+  return numProc;
+}
+
+
+int sys_getMaxPid(void){
+  int maxPid = 0;
+  maxPid = getMaxPid();
+  return maxPid;
+}
+
+int sys_getProcInfo(void){
+  int found = -1; 
+  found = getProcInfo();
+  return found;
+}
+
+// ===============
+//      hw4
+// ===============
+int sys_setprio (void) {
+  int priority;
+  argint(0, &priority);
+  if ( (priority > 7) | (priority < 0) )
+    return -1;
+
+  return setprio(priority); // change the priority for this pid.
+}
+
+
+
+int sys_getprio (void) {
+  return getprio();
+}

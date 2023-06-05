@@ -49,8 +49,12 @@ struct proc {
   struct file *ofile[NOFILE];  // Open files
   struct inode *cwd;           // Current directory
   char name[16];               // Process name (debugging)
+  int nrswitch;                // added for HW3, the number of times the process was 
+                               // context switched in by the scheduler 
+  int priority;                // added for HW4, the priority level of the process
+  uint timerTicksLeft;         // added for HW4, the number of timer ticks the process  
+                               // should potentially run accodrding to its priority level
 };
-
 // Process memory is laid out contiguously, low addresses first:
 //   text
 //   original data and bss

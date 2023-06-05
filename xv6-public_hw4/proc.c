@@ -6,6 +6,8 @@
 #include "x86.h"
 #include "proc.h"
 #include "spinlock.h"
+#include "processInfo.h"
+#include "stddef.h"
 
 struct {
   struct spinlock lock;
@@ -88,6 +90,9 @@ allocproc(void)
 found:
   p->state = EMBRYO;
   p->pid = nextpid++;
+  p->nrswitch = 0;
+  p->priority = 0;
+  p->timerTicksLeft = 1; // priority level = 0 : 2^0 timer ticks
 
   release(&ptable.lock);
 
@@ -342,13 +347,16 @@ scheduler(void)
       c->proc = p;
       switchuvm(p);
       p->state = RUNNING;
-
+      p->nrswitch++;
       swtch(&(c->scheduler), p->context);
       switchkvm();
 
       // Process is done running for now.
       // It should have changed its p->state before coming back.
       c->proc = 0;
+      //set the timerTicksLeft again to the required timer ticks to oprate
+      // it hold also for the case of sleep state, we should start the counting again
+      p->timerTicksLeft = 1 << p->priority;
     }
     release(&ptable.lock);
 
@@ -531,4 +539,132 @@ procdump(void)
     }
     cprintf("\n");
   }
+}
+
+
+// ===============
+//      hw3
+// ===============
+//  returns the total number of active processes in the system
+// (either in embryo, running, runnable, sleeping, or zombie states)
+int 
+getNumProc(void) 
+{ 
+  struct proc *p;
+  int NumProc = 0;
+
+  acquire(&ptable.lock);
+    for(p = ptable.proc; p < &ptable.proc[NPROC]; p++){
+      if (p->state != UNUSED){
+        NumProc++;
+      }
+    }
+  release(&ptable.lock);
+  return NumProc;
+
+}
+
+// ===============
+//      hw3
+// ===============
+// returns the maximum PID amongst the PIDs of all currently
+// active processes in the system
+int getMaxPid(void) 
+{ 
+  struct proc *p;
+  int MaxPid = 0;
+
+  acquire(&ptable.lock);
+    for(p = ptable.proc; p < &ptable.proc[NPROC]; p++){
+      if( (p->state != UNUSED) && (MaxPid <= p->pid) ){
+        MaxPid = p->pid;
+      }     
+    }
+  release(&ptable.lock);
+  return MaxPid;
+
+}
+
+
+// ===============
+//      hw3
+// ===============
+// the ofile field in the process struct is an array of files, but it is not neseccarilyy that some cells are not NULL, 
+// the function iterates the array and check the number of open files.
+int 
+countOfiles(struct file* ofile[NOFILE]){
+  int open = 0;
+  for (int i=0 ; i < NOFILE ; i++){
+    if (ofile[i] != NULL){
+      open ++;
+    }
+  }
+  return open;
+}
+
+// ===============
+//      hw3
+// ===============
+// takes as arguments an integer PID and a pointer to a structure processInfo. This structure is used for
+// passing information between user and kernel mode. It should return 0 on success, or negative
+// number on error (when a process with that PID does not exist).
+int
+getProcInfo(void)
+{
+  struct processInfo* info;
+  struct proc *p;
+  int pid;
+  int found = -1;
+  // take the 0th argument (pid), and the 1st argument (processInfo) and check if they're valid
+  if ( (argint(0, &pid) < 0) || (argptr(1, (void*)&info, sizeof(*info)) < 0) )
+    return -1;
+  
+  // search the pid in the process table
+  acquire(&ptable.lock);
+  for(p = ptable.proc; p < &ptable.proc[NPROC]; p++){
+    if(p->state != UNUSED && p->pid == pid){
+      // if found, update the processInfo fields
+      // found will be also the retrun code, if found = -1, so the pid wasn't found in the ptable, if it is 0 it was found
+      found = 0;
+      info->state = p->state;
+      if (pid != 1) {
+        info->ppid = p->parent->pid;
+      }
+      else {
+        info->ppid = 0;
+      }
+
+      info->sz = p->sz;
+      info->nfd= countOfiles(p->ofile);
+      info->nrswitch = p->nrswitch;
+    }
+  }
+  release(&ptable.lock);
+  return found;
+
+
+}
+
+
+// ===============
+//      hw4
+// ===============
+// set the current process with a given value of priority level, given as argument
+int
+setprio(int priority) {
+
+  struct proc *proc = myproc();
+  // setting a value in the process table, needs to lock for synchronization matters
+  acquire(&ptable.lock);
+  proc->priority = priority;
+  proc->timerTicksLeft = 1 << priority;
+  release(&ptable.lock);
+  return 0; // return 0 if succeed
+
+}
+
+
+int 
+getprio(void) {
+  return myproc()->priority;
 }

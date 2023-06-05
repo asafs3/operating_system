@@ -1,3 +1,6 @@
+#include "processInfo.h"
+
+struct processInfo;
 struct stat;
 struct rtcdate;
 
@@ -23,6 +26,11 @@ int getpid(void);
 char* sbrk(int);
 int sleep(int);
 int uptime(void);
+int getNumProc(void);
+int getMaxPid(void);
+int getProcInfo(int, struct processInfo*);
+int setprio(int priority);
+int getprio(void);
 
 // ulib.c
 int stat(const char*, struct stat*);
