@@ -15,6 +15,13 @@ int func(){
     }
     return sum;
 }
+int factorial(int n) {
+    int fact = 1;
+    for (int j = 1 ; j <= 50 ; j ++ ) {
+        fact *= j;
+    }
+    return fact;
+}
 
 // the function creates 16 children and prioritize them, that way the prioritizing 
 // mechanism could be verified
@@ -43,13 +50,8 @@ int main (int argc, char *argv[]) {
             
             // printf(1, "child %d created with pid %d\n", i, getpid());
             int calcStartTime = uptime();
-
             func();
-            // factorial calculation (12!)
-            // int fact = 1;
-            // for (int j = 1 ; j <= 50 ; j ++ ) {
-            //     fact *= j;
-            // }
+            
             int calcTime = uptime() - calcStartTime;
             printf(1, "child index\tpriority level\tcalc duration[ms]\n%d\t\t%d\t\t%d\n", i, getprio(), calcTime);
 

@@ -106,10 +106,9 @@ trap(struct trapframe *tf)
      tf->trapno == T_IRQ0+IRQ_TIMER) {
     // checking if the process did use all its timer ticks, if not decrement the timer ticks
     // number and use the cpu for one more timer tick
-    int currProcTimerTicks = myproc()->timerTicksLeft;
-    currProcTimerTicks --; 
+    myproc()->timerTicksLeft --;
     // when  the timer tick left for this process is 0, the process should yield
-    if (currProcTimerTicks == 0) {
+    if (myproc()->timerTicksLeft == 0) {
       yield();
     }
   }
