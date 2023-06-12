@@ -2,25 +2,39 @@
 #include "stat.h"
 #include "user.h"
 
-int func(){
-    int sum = 0;
-    while (sum != 55555) {
-        double pieCalc;
-        for (int z = 0; z < 55555555; z++) {
-            pieCalc = 3.14*5.5;
-            sum = sum + pieCalc;   // useless calculations to consume CPU time
-        }
-        sum = sum - 388888880;
-        sum = sum/ 10000;
+
+int factorial() {
+    long long int fact = 1;
+    // for (int j = 1 ; j <= 100000000 ; j ++ ) {
+    //     for (int p = 1 ; p <= 1000000000 ; p ++ ) {
+    //         fact = p*p*j;
+    //         // p = p*j;
+    //         fact = p*j;
+            
+    //     }
+
+    // }
+    for (int j = 1 ; j <= 100000000 ; j ++ ) {
+        fact = j*fact;
     }
-    return sum;
-}
-int factorial(int n) {
-    int fact = 1;
-    for (int j = 1 ; j <= 50 ; j ++ ) {
-        fact *= j;
-    }
+    // printf(1, "%d", fact);
+
+        
     return fact;
+}
+
+int whileloop() {
+    long long int cnt = 0;
+    while (cnt != 1000000000000) {
+        long long int p = cnt*cnt*cnt;
+        if (p == 2) {
+            break;
+        }
+        cnt ++;
+    }
+    // printf(1, "cnt =  %d\n", cnt);
+
+    return cnt;
 }
 
 // the function creates 16 children and prioritize them, that way the prioritizing 
@@ -50,8 +64,10 @@ int main (int argc, char *argv[]) {
             
             // printf(1, "child %d created with pid %d\n", i, getpid());
             int calcStartTime = uptime();
-            func();
-            
+            int fact = factorial();
+            if (fact == 2){ // for some reason without it, it maybe ignore the function, guess it's an optimization of the compiler because there is no use of the return value
+                break;
+            }
             int calcTime = uptime() - calcStartTime;
             printf(1, "child index\tpriority level\tcalc duration[ms]\n%d\t\t%d\t\t%d\n", i, getprio(), calcTime);
 
