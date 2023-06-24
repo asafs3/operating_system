@@ -18,96 +18,23 @@ Asaf Schwartz 208436048
 
 
 typedef struct {
-    unsigned char* fileName;
-    unsigned char* extension;
+    unsigned char* fullName;    // more convinient to cp function
+    unsigned char* fileName;    // more convinient to dir function
+    unsigned char* extension;   // more convinient to cp function
     int attribute;
     int fileSize;
     int creationTime;
     int fineTime;
     int creationDate;
-    int startingCluster;
+    int startingCluster;        // needed for cp function, cluser is a unit of allocation comprising a set of logically contiguous sectors
 } entry;
 
-// void replacechar(unsigned char **s,char c1,char c2)
-// {
-// 	int i=0;
-  
-     	
-//    for(i=0;s[i];i++)
-// 	{  
-// 		if(s[i]==c1)
-// 		{
-// 		   s[i]=c2;
-	 
-// 	    }
- 
-// 	}
-	   
-  
-// }
 
-// The function prints the file's name according to the date format in the FAT.pdf
-void namePrinting(unsigned char* fileName, unsigned char* extension){
-        int first = 0;
-        int space_till_end = 0;
-        int i = 0;
-        while (i < 8) {
-            if (fileName[i] == 32){
-                if (first == 0) {
-                    space_till_end = 1;
-                    first = i;
-                }
-                
-            }
-            else {
-                if ( (i> first) && (first != 0) ) {
-                    space_till_end = 0;
-                    break;
-                }
-            }
 
-            i ++;
-        }
-        if (space_till_end) {
-            fileName[first] = '\0';
-        }
+// ==================================================
+//                    common functions
+// ==================================================
 
-        printf("%s", fileName);
-        if (extension[0] != 32) {
-            printf(".");
-            printf("%s", extension);
-        }
-}
-
-// The function prints the file's creation date according to the date format in the FAT.pdf
-void datePrinting(int date) {
-    //0000 0000 0001 1111
-    int day = date & 0x1f;
-    //0000 0001 1110 0000
-    int month = (date >> 5) & 0xf;
-    //1111 1110 0000 0000
-    int year = 1980+((date >> 9) & 0x7f);
-    printf("%d/%d/%d\t", month, day, year);
-    return;
-}
-
-// The function prints the date according to the date format in the FAT.pdf
-void timePrinting(int fineTime, int creationTime) {
-    //0000 0111 1110 0000
-    int min = (creationTime >> 5) & 0x3f;
-    //1111 1000 0000 0000
-    int hour = (creationTime >> 11) & 0x1f;
-    
-    char am_pm[3];
-    strcpy(am_pm, "AM");
-    hour = 13;
-    if (hour > 12) {
-        hour = hour % 13;
-        strcpy(am_pm, "PM");
-    }
-    printf("%02d:%02d %s\t", hour, min, am_pm);
-    return;
-}
 
 // The function returns a buffer contain the data found at the offset location written as a string of unsigned char
  unsigned char* getCharData(FILE *fp, int offset, int bytesNum) {
@@ -159,6 +86,81 @@ int getBit(unsigned char byte, int index) {
     }
      
 }
+
+// ==================================================
+//                    dir functions
+// ==================================================
+
+
+// The function prints the file's name according to the name format in the FAT.pdf
+void namePrinting(unsigned char* fileName, unsigned char* extension){
+        int first = 0;
+        int space_till_end = 0;
+        int i = 0;
+        while (i < 8) {
+            if (fileName[i] == 32){
+                if (first == 0) {
+                    space_till_end = 1;
+                    first = i;
+                }
+                
+            }
+            else {
+                if ( (i> first) && (first != 0) ) {
+                    space_till_end = 0;
+                    break;
+                }
+            }
+
+            i ++;
+        }
+        if (space_till_end) {
+            fileName[first] = '\0';
+        }
+
+        printf("%s", fileName);
+        if (extension[0] != 32) {
+            printf(".");
+            printf("%s", extension);
+        }
+
+
+}
+
+// The function prints the file's creation date according to the date format in the FAT.pdf
+void datePrinting(int date) {
+    //0000 0000 0001 1111
+    int day = date & 0x1f;
+    //0000 0001 1110 0000
+    int month = (date >> 5) & 0xf;
+    //1111 1110 0000 0000
+    int year = 1980+((date >> 9) & 0x7f);
+    printf("%d/%d/%d\t", month, day, year);
+    return;
+}
+
+// The function prints the date according to the time format in the FAT.pdf
+void timePrinting(int fineTime, int creationTime) {
+    //0000 0111 1110 0000
+    int min = (creationTime >> 5) & 0x3f;
+    //1111 1000 0000 0000
+    int hour = (creationTime >> 11) & 0x1f;
+    
+    char am_pm[3];
+    strcpy(am_pm, "AM");
+    hour = 13;
+    if ( (hour >= 12) ) {
+        hour = hour % 12;
+        strcpy(am_pm, "PM");
+    }
+    if (hour == 0) {
+        hour = 12;
+    }
+    printf("%02d:%02d %s\t", hour, min, am_pm);
+    return;
+}
+
+
 // The function iterates through all files in root directory and prints their information
 void printRootEntries(FILE *fp, int startOfRoot) {
     
@@ -174,6 +176,7 @@ void printRootEntries(FILE *fp, int startOfRoot) {
         if (check == 0) break;
         else if (check == 229) continue;
         entry newEntry = {
+            0,
             getCharData(fp, index, 8  ), // file name - first 8 bytes, the name is of type unsigned char
             getCharData(fp, index+8, 3), // file extension - next 3 bytes, the name is of type unsigned char
             getIntData(fp, index+11, 1), // attributes bits - the 12th byte, this parameter is of type int
@@ -204,23 +207,146 @@ void printRootEntries(FILE *fp, int startOfRoot) {
 
         }
         namePrinting(newEntry.fileName, newEntry.extension);
-        
-
-        // char* sizeBuff = malloc(sizeof(char)*10);
-        // snprintf(sizeBuff, 10, "%d", newEntry.fileSize);
-        // printCenter(sizeBuff, 10);
-        // printCenter(newEntry.fileName, 20);
-        // printDate(newEntry.creationDate);
-        // printTime(newEntry.fineTime, newEntry.creationTime);
+    
         printf("\n");
     }
 }
 
 
+
+// ==================================================
+//                    cp functions
+// ==================================================
+
+// The function converts the input filename to the format stored in FAT12
+// the format is unsigned char, in uppercase.
+// consists of 11 bytes, 8 is the file name, if it is shorter - a space is inserted (ASCII 32)
+// and 3 last bytes is the extension (if no extension so it is filled with spaces )
+unsigned char* convertFileName(char* fileName) {
+    unsigned char* converted = (unsigned char*)malloc(sizeof(unsigned char)*11);
+    int i, j = 0;
+    for(i = 0; i < strlen(fileName); i++) {
+        // if detected '.', so the rest of the name should be filled with spaces (untill the 8th byte)
+        if (fileName[i] == '.') {
+            for (j = i; j < 8; j++) {
+                converted[j] = 32;
+            }
+            continue;
+        }
+        // before reaching '.', uppercase the character and set it in the converted name
+        // after reaching '.' and filling the rest with spaces until the 8th byte, continue filling the extension
+        converted[j++] = toupper(fileName[i]);
+    }
+    // if the name length is shorter than the 11 bytes given, fill the rest with spaces
+    while (j < 11) converted[j++] = 32;
+
+    return converted;
+}
+
+// The function searches for the given file in the root dictionary's entries
+entry searchRootEntry(FILE *imgFile, int startOfRoot, unsigned char* filename, char* inputName) {
+    int totalRoot = getIntData(imgFile, 0x11, 2);
+    int i;
+    for (i = 0; i < totalRoot; i++) {
+        // each entry is 32 bytes
+        int index = startOfRoot+i*32;
+        int check = getIntData(imgFile, index, 1);
+        if (check == 0) break;
+        else if (check == 229) continue;
+
+        entry newEntry = {
+            getCharData(imgFile, index, 11),   // filename
+            0,
+            0,
+            getIntData(imgFile, index+11, 1), // attribute
+            getIntData(imgFile, index+28, 4),  // filesize
+            0,
+            0,
+            0,
+            getIntData(imgFile, index+26, 2) // startingCluster
+
+        };
+        if (newEntry.attribute == 0 && newEntry.startingCluster <= 0) continue; //If not a file/directory
+        else if (getBit(newEntry.attribute, 3)) continue; // if its a volume label
+        
+        // if the current entry is the right entry, return it to the copying function
+        int t= 0;
+    
+        // the byte length read for the fullName field is 11 bytes and same for the filename by the generation of it 
+        while (t < 11) {
+            if (filename[t] != newEntry.fullName[t]) {
+                break;
+            }
+            t ++;
+        }
+        if (t == 11) {
+            return newEntry;
+        }        
+    }
+    printf("File %s does not exist in the root directory\n", inputName);
+    fclose(imgFile);
+    exit(0);
+}
+
+
+//Reads an entry number in the FAT and returns number of next cluster
+int getNextCluster(FILE *fp, int bytesPerSect, int logicalClust) {
+    int offset = floor(logicalClust*3.0/2.0);
+    int bit16  = getIntData(fp, bytesPerSect + offset, 2);
+    int bit12 = logicalClust%2 == 0 ? bit16 & 0xfff : bit16 >> 4;
+    return bit12;
+}
+
+//Reads the data from the disk image and writes to a file in current directory
+void cpToLinux(FILE *fp, char* linuxName, int startCluster, int bytesPerSect, int neededByteNum) {
+    int SecPerClust = getIntData(fp, 0x0D, 1);
+    int bytesPerClust = SecPerClust*bytesPerSect;
+    FILE *linuxFile = fopen(linuxName, "w");
+    if (linuxFile == NULL) {
+        printf("hw5 error : could not write %s\n", linuxName);
+        exit(1);
+    }
+    // start writing the disk file's clusters
+    int currCluster = startCluster;
+    // cluster value 0xFFF : Cluster is allocated and is the final cluster for the file (indicates end-of-file).
+    // cluser value 0xFF8-0xFFE : Reserved and should not be used. May be interpreted as an allocated cluster and the final
+    // cluster in the file (indicating end-of-file condition). 
+    // to conclude to keep searching for next cluster we need to find cluster values smaller than 0xFF8
+    while (currCluster != 0 && currCluster < 0xFF8) {
+        // writing the current bytes of the cluser into the file
+        // if the remaining number of bytes needed for this file is less than the number of bytes in a cluster,
+        // so write only the number of remaining bytes
+        int numBytesWrite = bytesPerClust < neededByteNum ? bytesPerClust : neededByteNum;
+        int startOfData = 33*bytesPerSect + bytesPerClust*(currCluster - 2);
+        fwrite(getCharData(fp, startOfData, numBytesWrite), 1, startOfData, linuxFile);
+        neededByteNum -= bytesPerClust;
+        currCluster = getNextCluster(fp, bytesPerSect, currCluster);
+    }
+
+    printf("File copied from disk successfuly!\n");
+    fclose(linuxFile);
+    return;
+}
+
+void cpDiskFile(FILE* imgFile, int startOfRoot, int bytesPerSect, char* fatFile, char* linuxFile) {
+
+    unsigned char* fatFileformatted = convertFileName(fatFile);
+    entry found = searchRootEntry(imgFile, startOfRoot, fatFileformatted, fatFile);
+    cpToLinux(imgFile, linuxFile, found.startingCluster, bytesPerSect, found.fileSize);
+    return;
+
+}
+
+
 int main(int argc, char* argv[]) {
+
+    // ============================
+    // getting the user's arguments
+    // ============================
     char imgName[ARG_SIZE] = "\0";
     char cmd[ARG_SIZE] = "\0";
     int dirNotCp; 
+    char fatFile[ARG_SIZE], linuxFile[ARG_SIZE];
 
     if ( (argv[1] == NULL) | (argv[2] == NULL) ) {
         printf("hw5 error : missing image file or command\n");
@@ -228,11 +354,9 @@ int main(int argc, char* argv[]) {
     }
     strcpy(imgName, argv[1]);
     strcpy(cmd, argv[2]);
-
     FILE *imgFile;
     imgFile = fopen(imgName,"rb");
     if (!imgFile) {
-        // printf("error: file open failed '%s'.\n", imgName);
         printf("hw5 error : invalid command (filesystem image) - failed to open '%s'.\n", imgName);
         exit(0);
     }
@@ -246,12 +370,18 @@ int main(int argc, char* argv[]) {
             printf("hw5 error :invalid command, cp require a source file and a destination file\n");
             exit(0);
         }
+        else {
+            strcpy(fatFile, argv[3]);
+            strcpy(linuxFile, argv[4]);
+        }
     }
     else {
         printf("hw5 error : invalid command\n");
     }
 
-
+    // ==================================
+    // get main file system's information
+    // ==================================
     int bytesPerSect  = getIntData(imgFile, 0x0B, 2);
     int reserved      = getIntData(imgFile, 0x0E, 2);
     int numFAT        = getIntData(imgFile, 0x10, 1);
@@ -261,11 +391,12 @@ int main(int argc, char* argv[]) {
     if (dirNotCp == 1) {
         printRootEntries(imgFile, startOfRoot);
     }
+    else {
+        cpDiskFile(imgFile, startOfRoot, bytesPerSect, fatFile, linuxFile);
+    }
 
 
-    // entry foundEntry = searchRootEntries(fp, startOfRoot, fileName);
 
-    // writeFile(fp, argv[2], foundEntry.startingCluster, bytesPerSect, foundEntry.fileSize);
 
     fclose(imgFile);
 }
